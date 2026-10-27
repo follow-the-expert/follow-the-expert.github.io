@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Follow-the-Expert (FTE)</title>
+  <meta name="description" content="Follow-the-Expert synthesizes robot demonstrations in a Gaussian-splat twin of a real lab without losing the expert's motion. One teleoperated demonstration and one scan become a real-robot policy on Spot.">
+  <meta property="og:title" content="Follow-the-Expert: Expert-Preserving Demonstration Synthesis in a Gaussian-Splat Twin">
+  <meta property="og:description" content="One VR demonstration and one scan of the lab become hundreds of rendered demonstrations that keep the expert's motion, and a policy that runs on a real Spot.">
+  <meta property="og:image" content="static/videos/overview.jpg">
+  <meta name="theme-color" content="#0b0b0c">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="static/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0b0c'/%3E%3Cpath d='M7 22 C11 10, 15 10, 16 16 S21 22, 25 10' stroke='%23f5c518' stroke-width='2.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="#top" aria-label="Follow-the-Expert, back to top">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 23 C10 9, 15 9, 16 16 S22 23, 27 9" /></svg>
+      <span>Follow-the-Expert</span>
+    </a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#problem">Problem</a>
+      <a href="#approach">Approach</a>
+      <a href="#method">Method</a>
+      <a href="#results">Results</a>
+      <a href="#ablations">Ablations</a>
+      <a href="#numbers">Table</a>
+    </nav>
+    <a class="nav-cta" href="static/fte_lbr_corl2026.pdf">Paper</a>
+  </div>
+  <div class="progress" aria-hidden="true"><i id="progress"></i></div>
+</header>
+
+<!-- section rail: the page as a trajectory, one phase-boundary node per section (wide screens only) -->
+<nav class="rail" aria-label="Page sections" id="rail">
+  <ol>
+    <li><a href="#abstract"><i></i><span>Abstract</span></a></li>
+    <li><a href="#problem"><i></i><span>Problem</span></a></li>
+    <li><a href="#approach"><i></i><span>Approach</span></a></li>
+    <li><a href="#method"><i></i><span>Method</span></a></li>
+    <li><a href="#results"><i></i><span>Real robot</span></a></li>
+    <li><a href="#obstacles"><i></i><span>Obstacles</span></a></li>
+    <li><a href="#ablations"><i></i><span>Ablations</span></a></li>
+    <li><a href="#range"><i></i><span>Range</span></a></li>
+    <li><a href="#numbers"><i></i><span>Table</span></a></li>
+    <li><a href="#limitations"><i></i><span>Limitations</span></a></li>
+  </ol>
+</nav>
+
+<main id="main">
+
+<!-- ============================== hero ============================== -->
+<section class="hero dark" id="top">
+  <div class="wrap hero-grid">
+    <div class="hero-text">
+      <p class="eyebrow">CoRL 2026 &middot; Late-Breaking Results</p>
+      <h1>Follow&#8209;the&#8209;Expert</h1>
+      <p class="subtitle">Expert-preserving demonstration synthesis in a Gaussian-splat&nbsp;twin</p>
+      <p class="authors"><span>Moniruzzaman Akash</span><span>Momotaz Begum</span></p>
+      <p class="affil">University of New Hampshire</p>
+      <div class="buttons">
+        <a class="btn btn-solid" href="static/fte_lbr_corl2026.pdf">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2.5h6.5L15.5 6.5V17.5H5Z M11.5 2.5V6.5H15.5"/></svg>Paper <span>PDF</span></a>
+        <a class="btn" href="#results">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 16.5h14 M5.5 13.5v-4 M10 13.5v-8 M14.5 13.5v-6"/></svg>Results</a>
+      </div>
+    </div>
+    <figure class="hero-video">
+      <div class="frame" id="ov-frame">
+        <video id="ov-video" muted loop playsinline preload="metadata" poster="static/videos/overview.jpg"
+               aria-label="Narrated overview of Follow-the-Expert, 2 minutes 45 seconds">
+          <source src="static/videos/overview.mp4" type="video/mp4">
+        </video>
+        <button type="button" class="ov-sound" id="ov-sound">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6.5 4.5 L15.5 10 L6.5 15.5 Z"/></svg>Watch with sound<span>2:45</span>
+        </button>
+        <span class="tag tag-tl" id="ov-tag">Muted preview</span>
+      </div>
+      <figcaption>A narrated overview of the method and the real-robot results.</figcaption>
+    </figure>
+  </div>
+  <!-- the expert's path with its phase boundaries, drawn once as the page opens -->
+  <svg class="hero-path" viewBox="0 0 1600 150" aria-hidden="true">
+    <path class="hp-expert" d="M-20 118 C 150 118, 220 44, 380 54 S 640 132, 820 100 S 1080 22, 1240 44 S 1480 116, 1620 76"/>
+    <path class="hp-draw" d="M-20 118 C 150 118, 220 44, 380 54 S 640 132, 820 100 S 1080 22, 1240 44 S 1480 116, 1620 76"/>
+    <circle cx="380" cy="54" r="6.5"/><circle cx="820" cy="100" r="6.5"/><circle cx="1240" cy="44" r="6.5"/>
+  </svg>
+  <div class="wrap stats" role="list">
+    <div class="stat" role="listitem"><b>75.6<small>%</small></b><span>success on four shape-sensitive tasks</span><em>TrajOpt 40.0%, MPLib 3.8%</em></div>
+    <div class="stat" role="listitem"><b>86.7<small>%</small></b><span>with obstacles absent from the demo</span><em>TrajOpt 60.0%, three tasks, 500 demos</em></div>
+    <div class="stat" role="listitem"><b>1</b><span>human demonstration per task</span><em>plus one handheld scan of the lab</em></div>
+    <div class="stat" role="listitem"><b>40</b><span>real rollouts per trained policy</span><em>six tasks on one Boston Dynamics Spot</em></div>
+  </div>
+</section>
+
+<!-- ============================== abstract ============================== -->
+<section class="wrap block abstract-block" id="abstract">
+  <div class="abstract-grid">
+    <header>
+      <p class="kicker"><i></i>Abstract</p>
+      <h2>One demonstration, hundreds of rendered ones, and the expert's motion kept</h2>
+    </header>
+    <p class="abstract">A 3D Gaussian Splatting (3DGS) twin can turn one real demonstration into hundreds of rendered ones and
+      train a policy that runs on the real robot. We find that for skills defined by their path, this Real2Sim2Real loop
+      works best when the synthesized motion stays the expert's. Follow-the-Expert (FTE) replays each phase of one VR
+      demonstration as a dynamic movement primitive, moves only the phase boundaries and their object splats, and lets
+      the splat's density steer the gripper around obstacles. On a real Boston Dynamics Spot, FTE policies succeed in
+      75.6% of rollouts on four shape-sensitive tasks, against 40.0% for trajectory optimization and 3.8% for keyframe
+      motion planning; all three tie at 91.3% where only the end state matters. FTE also leads with obstacles absent
+      from the demonstration (86.7% vs. 60.0% on three tasks), and doubling the offset bounds needs only more rendered
+      demonstrations.</p>
+  </div>
+</section>
+
+<!-- ============================== problem ============================== -->
+<section class="wrap block" id="problem">
+  <header class="sec-head">
+    <p class="kicker"><i></i>01 &middot; Problem</p>
+    <h2>When the path is the task, <span class="nowrap">re-planning</span> loses it</h2>
+  </header>
+  <div class="split split-media">
+    <div class="prose">
+      <p>A Gaussian-splat twin can turn one real demonstration into hundreds: move the objects, retarget a few keyframes,
+        and plan the arm motion between them. Planners optimize reaching those keyframes, and for pick-and-place that
+        is all the task needs.</p>
+      <p>In wiping, pushing, writing and filming, the path itself matters. A wipe has to cover the spill, a push has to
+        leave the object graspable, a pen has to draw the letter, and a camera has to follow its arc. We call such tasks
+        <strong>shape-sensitive</strong>. For them, a path planned between keyframes differs from the demonstrated one in
+        ways that decide whether the task succeeds.</p>
+      <p class="aside">The clip shows two sampled layouts of Writing &ldquo;A&rdquo;, rendered from the same single
+        demonstration by MPLib, which plans between retargeted keyframes (as in RoboSplat), by TrajOpt, which
+        optimizes the motion between them (as in 1001&nbsp;DEMOS), and by FTE.</p>
+    </div>
+    <figure class="synth-cmp">
+      <div class="cmp-labels" aria-hidden="true">
+        <span class="m-mplib">MPLib</span><span class="m-trajopt">TrajOpt</span><span class="m-fte">FTE (ours)</span>
+      </div>
+      <div class="frame">
+        <video class="autoplay" muted loop playsinline preload="none" poster="static/videos/synth_writing.jpg"
+               aria-label="Rendered Writing A demonstrations for two sampled layouts from MPLib, TrajOpt and FTE"><source src="static/videos/synth_writing.mp4" type="video/mp4"></video>
+        <span class="tag tag-bl">Rendered in the twin <b>1.5×</b></span>
+      </div>
+      <figcaption>Within each layout, all three generators get the same objects and phase boundaries.</figcaption>
+    </figure>
+  </div>
+  <figure class="plate whiteboard">
+    <img src="static/images/writing_real.jpg" alt="Whiteboards after one real rollout of each policy: the expert's A, a single line from MPLib, a distorted shape from TrajOpt, and a clear A from FTE" loading="lazy">
+    <figcaption><b>On the real robot.</b> The whiteboard after one real rollout of each policy, each trained on the same
+      demonstration plus 256 rendered ones (rectified frontal view). Mean stroke IoU with the expert over 40 rollouts:
+      FTE 0.381, TrajOpt 0.136, MPLib 0.031.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================== approach ============================== -->
+<section class="wrap block" id="approach">
+  <header class="sec-head">
+    <p class="kicker"><i></i>02 &middot; Approach</p>
+    <h2>Keep the expert's motion. Move only what has to move.</h2>
+    <p class="sec-lead">FTE treats the demonstration as a sequence of phases and changes as little of it as the new
+      scene requires. Drag the object in the schematic, or add an obstacle.</p>
+  </header>
+  <div class="idea">
+    <figure class="card idea-card">
+      <div class="idea-bar">
+        <div class="idea-legend" aria-hidden="true">
+          <span class="lg lg-expert">Expert demo</span><span class="lg lg-fte">FTE (ours)</span><span class="lg lg-plan">Keyframe re-planning</span><span class="lg lg-node">Phase boundary</span>
+        </div>
+        <div class="idea-ctrl">
+          <button type="button" class="chip" id="idea-obs" aria-pressed="false">Add an obstacle</button>
+          <button type="button" class="chip" id="idea-plan" aria-pressed="true">Re-planning</button>
+          <button type="button" class="chip chip-ghost" id="idea-sample">New layout</button>
+        </div>
+      </div>
+      <div class="idea-canvas" id="idea-demo" role="img"
+           aria-label="Schematic: an expert path with an approach phase and a wiping phase. When the object moves, FTE keeps the wiping motion and the approach arc; a keyframe planner joins the boundaries with straight segments. With an obstacle, the FTE path bends around it and returns."></div>
+      <figcaption>A 2-D schematic, not robot data. The blue curve is a real DMP rollout: each phase replays the expert's
+        forcing term toward its moved boundary, and the obstacle adds a density-gradient acceleration. The gray line
+        joins the same boundaries directly; real planners use more keyframes, but the motion between them is planned
+        rather than demonstrated.</figcaption>
+    </figure>
+    <ol class="idea-steps">
+      <li>
+        <h3>Split at the operator's button presses</h3>
+        <p>While teleoperating, the operator presses a button at each phase change (approach, grasp, wipe, and so on).
+          Each phase becomes a dynamic movement primitive (DMP) whose forcing term stores the expert's motion.</p>
+      </li>
+      <li>
+        <h3>Move the boundaries, keep the motion</h3>
+        <p>Synthesis samples bounded offsets of the phase boundaries and moves the linked object splats with them. Each
+          DMP replays the expert's forcing term toward its new boundary, keeping the approach, contact path, gripper
+          timing and orientation.</p>
+      </li>
+      <li>
+        <h3>One splat, two jobs</h3>
+        <p>The splat renders the robot's front and top camera views. The Gaussians of designated obstacles also form a
+          density field; its gradient enters the DMP as a repulsive acceleration (the density term), so the gripper
+          steps around the obstacle and returns to the expert's path.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============================== method ============================== -->
+<section class="wrap block" id="method">
+  <header class="sec-head">
+    <p class="kicker"><i></i>03 &middot; Method</p>
+    <h2>Real to sim to real, in six steps</h2>
+    <p class="sec-lead">Steps 1, 2 and 6 take place in the real lab; steps 3 to 5 run in the splat twin.</p>
+  </header>
+
+  <figure class="plate loop">
+    <img src="static/images/loop.jpg" alt="Real lab, 3DGS twin, synthesized trajectories (expert in black, FTE in gray), and the real-robot policy wiping around an obstacle that was not in the demonstration" loading="lazy">
+    <figcaption>The whole loop on Sweep Clean: real lab, splat twin, synthesized trajectories (expert in black), and the
+      real policy wiping around an obstacle absent from the demonstration.</figcaption>
+  </figure>
+
+  <article class="chapter">
+    <div class="chapter-text">
+      <p class="step"><span class="realm realm-real">Real</span>Step 1</p>
+      <h3>Scan the lab</h3>
+      <p>A handheld video of the lab becomes a 3D Gaussian splat in 5&ndash;10 minutes, registered to the
+        robot frame by ICP (7.7&nbsp;mm trimmed-mean residual). Spot and the objects are scanned separately. All six
+        tasks share the one lab scan.</p>
+    </div>
+    <div class="chapter-media capture">
+      <figure class="frame c-main">
+        <video class="autoplay" muted loop playsinline preload="none" poster="static/videos/cap_scene.jpg"><source src="static/videos/cap_scene.mp4" type="video/mp4"></video>
+        <span class="tag tag-bl">The lab <b>2×</b></span>
+      </figure>
+      <figure class="frame">
+        <video class="autoplay" muted loop playsinline preload="none" poster="static/videos/cap_robot.jpg"><source src="static/videos/cap_robot.mp4" type="video/mp4"></video>
+        <span class="tag tag-bl">Spot <b>2×</b></span>
+      </figure>
+      <figure class="frame">
+        <video class="autoplay" muted loop playsinline preload="none" poster="static/videos/cap_objects.jpg"><source src="static/videos/cap_objects.mp4" type="video/mp4"></video>
+        <span class="tag tag-bl">Objects</span>
+      </figure>
+    </div>
+  </article>
+
+  <article class="chapter">
+    <div class="chapter-text">
+      <p class="step"><span class="realm realm-real">Real</span>Step 2</p>
+      <h3>Demonstrate once</h3>
+      <p>An operator teleoperates Spot's arm in VR and presses a button at each phase change. No other human data is
+        used.</p>
+    </div>
+    <div class="chapter-media">
+      <figure class="frame">
+        <video class="autoplay" muted loop playsinline preload="none" poster="static/videos/teleop.jpg"><source src="static/videos/teleop.mp4" type="video/mp4"></video>
+        <span class="tag tag-bl">VR teleoperation <b>2×</b></span>
+      </figure>
+    </div>
+  </article>
+
+  <div class="demos">
+    <p class="demos-title">The one human demonstration for each task <span>2× speed</span></p>
+    <div class="demo-row">
+      <figure><div class="frame tall"><video class="autoplay" muted loop playsinline preload="none" poster="static/videos/demo_sweep.jpg"><source src="static/videos/demo_sweep.mp4" type="video/mp4"></video></div><figcaption>Sweep Clean</figcaption></figure>
+      <figure><div class="frame tall"><video class="autoplay" muted loop playsinline preload="none" poster="static/videos/demo_ppp.jpg"><source src="static/videos/demo_ppp.mp4" type="video/mp4"></video></div><figcaption>Push&ndash;Pick&ndash;Place</figcaption></figure>
+      <figure><div class="frame tall"><video class="autoplay" muted loop playsinline preload="none" poster="static/videos/demo_writing.jpg"><source src="static/videos/demo_writing.mp4" type="video/mp4"></video></div><figcaption>Writing &ldquo;A&rdquo;</figcaption></figure>
+      <figure><div class="frame tall"><video class="autoplay" muted loop playsinline preload="none" poster="static/videos/demo_videography.jpg"><source src="static/videos/demo_videography.mp4" type="video/mp4"></video></div><figcaption>Videography</figcaption></figure>
+      <figure><div class="frame tall"><video class="autoplay" muted loop playsinline preload="none" poster="static/videos/demo_sponge.jpg"><source src="static/videos/demo_sponge.mp4" type="video/mp4"></video></div><figcaption>Sponge Pick&ndash;Place</figcaption></figure>
+      <figure><div class="frame tall"><video class="autoplay" muted loop playsinline preload="none" poster="static/videos/demo_stove.jpg"><source src="static/videos/demo_stove.mp4" type="video/mp4"></video></div><figcaption>Stove</figcaption></figure>
+    </div>
+  </div>
+
+  <article class="chapter">
+    <div class="chapter-text">
+      <p class="step"><span class="realm realm-sim">Sim</span>Step 3</p>
+      <h3>Build the twin</h3>
+      <p>Spot's splat is split into per-link Gaussians that follow any arm configuration through forward kinematics,
+        and each object splat moves rigidly, so the twin renders the robot's front and top camera views for any arm
+        pose and layout. The Gaussians of designated obstacles double as the obstacle model.</p>
+    </div>
+    <div class="chapter-media">
+      <figure class="frame">
+        <video class="autoplay" muted loop playsinline preload="none" poster="static/videos/twin.jpg"><source src="static/videos/twin.mp4" type="video/mp4"></video>
+        <span class="tag tag-bl">3DGS twin of the lab</span>
+      </figure>
+    </div>
+  </article>
+
+  <article class="chapter">
+    <div class="chapter-text">
+      <p class="step"><span class="realm realm-sim">Sim</span>Step 4</p>
+      <h3>Perturb the scene</h3>
+      <p>Each phase boundary of the demonstration is linked to an object splat, for example the sponge, the box and
+        its target bowl, or the whiteboard. For every synthetic demonstration we sample a bounded offset for each
+        boundary (about 0.1&nbsp;m per axis) and move the boundary and its object together, so the robot sees a new
+        layout every time.</p>
+    </div>
+    <div class="chapter-media">
+      <figure class="plate plate-tight">
+        <img src="static/images/perturbation_synth.png" alt="Sweep Clean expert path with sampled offsets of its four phase boundaries, and the synthesized DMP rollouts retargeted to them" loading="lazy">
+        <figcaption>Sweep Clean. (a) Sampled offsets (orange) of the phase boundaries P0&ndash;P3 on the expert path
+          (blue). (b) DMP rollouts (gray) retargeted to those offsets.</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <figure class="flip">
+    <div class="hscroll">
+      <div class="hscroll-inner">
+        <div class="flip-labels" aria-hidden="true"><span>Sweep Clean</span><span>Push&ndash;Pick&ndash;Place</span><span>Writing &ldquo;A&rdquo;</span><span>Sponge Pick&ndash;Place</span><span>Stove</span></div>
+        <div class="frame">
+          <video class="autoplay" muted loop playsinline preload="none" poster="static/videos/perturb_flip.jpg"
+                 aria-label="100 sampled object layouts per task, flipping eight per second, with a coverage heat map building up"><source src="static/videos/perturb_flip.mp4" type="video/mp4"></video>
+        </div>
+      </div>
+    </div>
+    <figcaption>The first rendered frame of 100 FTE demonstrations per task, eight per second. The objects jump to a
+      new sampled layout in every frame, and the heat map builds up wherever the perturbation placed them (for
+      Push&ndash;Pick&ndash;Place it also marks the arm's sampled start pose). The last frame is the coverage heat map of
+      the whole set.</figcaption>
+  </figure>
+
+  <!-- Step 5 breaks out of the column into a full-width dark band -->
+  <div class="bleed dark">
+    <article class="chapter chapter-wide">
+      <div class="chapter-text">
+        <p class="step"><span class="realm realm-sim">Sim</span>Step 5</p>
+        <h3>Follow the expert</h3>
+        <p>Each sampled layout becomes one demonstration. FTE rolls out the expert's DMPs toward the moved boundaries
+          and renders the robot's camera views frame by frame. The baselines fill in the same layouts their own way:
+          MPLib plans the motion, TrajOpt optimizes it.</p>
+      </div>
+    </article>
+    <figure class="collage">
+      <div class="hscroll">
+        <div class="hscroll-inner">
+          <div class="collage-cols" aria-hidden="true">
+            <span>Sweep Clean</span><span>Push&ndash;Pick&ndash;Place</span><span>Writing &ldquo;A&rdquo;</span><span>Sponge Pick&ndash;Place</span><span>Stove</span>
+          </div>
+          <div class="collage-body">
+            <div class="collage-rows" aria-hidden="true">
+              <span class="m-mplib">MPLib</span><span class="m-trajopt">TrajOpt</span><span class="m-fte">FTE (ours)</span>
+            </div>
+            <div class="frame">
+              <video class="autoplay" muted loop playsinline preload="none" poster="static/videos/synth_collage.jpg"
+                     aria-label="Every rendered demonstration from MPLib, TrajOpt and FTE, played back to back at high speed; each column shows the same layout in all three rows"><source src="static/videos/synth_collage.mp4" type="video/mp4"></video>
+            </div>
+          </div>
+        </div>
+      </div>
+      <figcaption>Every rendered demonstration, about 100 per task and generator, played back to back at high speed
+        with a new sampled layout every 0.6&nbsp;s. Down each column the objects and phase boundaries are identical; only
+        the motion between them differs. In the Writing column the pen trace shows each generator's path.</figcaption>
+    </figure>
+  </div>
+
+  <article class="chapter">
+    <div class="chapter-text">
+      <p class="step"><span class="realm realm-real">Real</span>Step 6</p>
+      <h3>Train, then deploy</h3>
+      <p>The rendered front and top views, plus the one real demonstration, train a Diffusion Policy with the same
+        architecture for every generator. The policy then runs on the real Spot. The twin simulates no dynamics: it
+        renders views and supplies the obstacle density.</p>
+    </div>
+    <div class="chapter-media">
+      <figure class="frame">
+        <video class="autoplay" muted loop playsinline preload="none" poster="static/videos/views_sweep.jpg"><source src="static/videos/views_sweep.mp4" type="video/mp4"></video>
+        <span class="tag tag-tl">Front camera</span><span class="tag tag-tr">Top camera</span>
+      </figure>
+    </div>
+  </article>
+
+  <details class="pipeline">
+    <summary>Full pipeline diagram</summary>
+    <img src="static/images/pipeline.png" alt="FTE pipeline: scene capture, alignment, segmentation and DMP prior, obstacle-aware synthesis, dataset export" loading="lazy">
+  </details>
+</section>
+
+<!-- ============================== real robot ============================== -->
+<section class="wrap block" id="results">
+  <header class="sec-head">
+    <p class="kicker"><i></i>04 &middot; Real robot</p>
+    <h2>Same demonstration, only the generator differs</h2>
+    <p class="sec-lead">We trained one Diffusion Policy per task and generator and ran each 40 times on the real Spot.
+      Within a task, every policy saw the same demonstration, phase boundaries, sampled layouts, cameras and
+      architecture.</p>
+  </header>
+
+  <div class="split split-tasks">
+    <figure class="plate">
+      <img src="static/images/tasks.jpg" alt="The six tasks with their phases: Sweep Clean, Push-Pick-Place, Writing A, Sponge Pick-Place, Stove, Videography" loading="lazy">
+      <figcaption>The six tasks and their phases, all in the one scanned lab.</figcaption>
+    </figure>
+    <div class="prose">
+      <h3>Six tasks, two kinds</h3>
+      <p><strong>Four shape-sensitive tasks:</strong> Sweep Clean (pick up a sponge and wipe spilled water off the
+        table), Push&ndash;Pick&ndash;Place (push a block out, then pick it up and place it in a container), Writing
+        &ldquo;A&rdquo; (write the letter on a whiteboard) and Videography (pick up a camera, film a flower along an arc,
+        put the camera down and cover it with a box).</p>
+      <p><strong>Two endpoint-dominated controls,</strong> where only the end state matters: Sponge Pick&ndash;Place and
+        Stove (move a pan onto the stove). They test whether FTE's gain comes from the path or from better data in
+        general.</p>
+    </div>
+  </div>
+
+  <div class="headline">
+    <figure class="card">
+      <div class="pooled" id="pooled-chart" role="img"
+           aria-label="Pooled real-robot success. Shape-sensitive tasks: FTE 75.6 percent, TrajOpt 40.0, MPLib 3.8. Endpoint-dominated tasks: all three 91.3 percent."></div>
+      <figcaption>Real-robot success, 256 synthetic demos, 40 rollouts per task and method. Hover a bar for the
+        count.</figcaption>
+    </figure>
+    <div class="prose">
+      <h3>Where the path matters, FTE leads; where it does not, all tie</h3>
+      <p>On the four shape-sensitive tasks, FTE succeeds in 121 of 160 real rollouts (75.6%), against 64 for TrajOpt
+        and 6 for MPLib (task-stratified test, FTE vs. TrajOpt, <i>p</i>&nbsp;&lt;&nbsp;10<sup>&minus;10</sup>). FTE leads
+        on each of the four.</p>
+      <p>On the two endpoint controls, all three generators succeed in exactly 73 of 80 (91.3%). The gain appears only
+        on the shape-sensitive tasks, which is what keeping the expert's path predicts.</p>
+    </div>
+  </div>
+
+  <div class="bleed dark">
+    <h3 class="watch-title">Watch them side by side</h3>
+    <div class="tabs" role="tablist" aria-label="Task for real-robot comparison" id="real-tabs">
+      <button role="tab" aria-selected="true"  data-task="writing" data-rates="0.0,5.0,62.5" data-speed="2×"
+              data-note="The written letter is the task output.">Writing &ldquo;A&rdquo;</button>
+      <button role="tab" aria-selected="false" data-task="sweep"   data-rates="12.5,75.0,92.5" data-speed="3×"
+              data-note="Wipe direction and sustained contact decide whether the table is cleaned.">Sweep Clean</button>
+      <button role="tab" aria-selected="false" data-task="ppp"     data-rates="2.5,30.0,75.0" data-speed="4×"
+              data-note="The push has to leave the object graspable for the pick.">Push&ndash;Pick&ndash;Place</button>
+      <button role="tab" aria-selected="false" data-task="videography" data-rates="0.0,50.0,72.5" data-speed="4×"
+              data-note="The camera has to follow the demonstrated arc around the flower.">Videography</button>
+      <button role="tab" aria-selected="false" data-task="sponge"  data-rates="95.0,92.5,92.5" data-speed="2×"
+              data-note="Endpoint control: when only the end state matters, all three generators work.">Sponge Pick&ndash;Place</button>
+      <button role="tab" aria-selected="false" data-task="stove"   data-rates="87.5,90.0,90.0" data-speed="2×"
+              data-note="Endpoint control: when only the end state matters, all three generators work.">Stove</button>
+    </div>
+    <div class="compare" role="tabpanel" id="compare">
+      <figure class="cmp-col" data-method="mplib">
+        <figcaption class="cmp-head"><span class="sw m-mplib"></span>MPLib<span class="rate js-rate">0.0%</span></figcaption>
+        <div class="frame"><video muted playsinline preload="none" poster="static/videos/real_writing_mplib.jpg"><source src="static/videos/real_writing_mplib.mp4" type="video/mp4"></video></div>
+        <div class="bar"><i class="m-mplib" style="width:0%"></i></div>
+      </figure>
+      <figure class="cmp-col" data-method="trajopt">
+        <figcaption class="cmp-head"><span class="sw m-trajopt"></span>TrajOpt<span class="rate js-rate">5.0%</span></figcaption>
+        <div class="frame"><video muted playsinline preload="none" poster="static/videos/real_writing_trajopt.jpg"><source src="static/videos/real_writing_trajopt.mp4" type="video/mp4"></video></div>
+        <div class="bar"><i class="m-trajopt" style="width:5%"></i></div>
+      </figure>
+      <figure class="cmp-col is-ours" data-method="fte">
+        <figcaption class="cmp-head"><span class="sw m-fte"></span>FTE (ours)<span class="rate js-rate">62.5%</span></figcaption>
+        <div class="frame"><video muted playsinline preload="none" poster="static/videos/real_writing_fte.jpg"><source src="static/videos/real_writing_fte.mp4" type="video/mp4"></video></div>
+        <div class="bar"><i class="m-fte" style="width:62.5%"></i></div>
+      </figure>
+    </div>
+    <p class="cmp-note" id="cmp-note">The written letter is the task output. <span>One real rollout per policy, 2&times;
+      speed; the three clips start together. Bars: success over 40 rollouts.</span></p>
+  </div>
+
+  <figure class="plate traj">
+    <img src="static/images/rollout_paths.png" alt="End-effector trajectories for Sweep Clean, Push-Pick-Place and Writing A: synthesized by MPLib, TrajOpt and FTE (gray) and the resulting policy rollouts (orange), with the expert in blue" loading="lazy">
+    <figcaption><b>Synthesized and rollout trajectories.</b> Left block: end-effector paths synthesized from one expert
+      demonstration (gray; expert in blue). Right block: rollouts of the policies trained on that data (orange). FTE's
+      data keeps the expert's path, and its policy's rollouts follow it.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================== obstacles ============================== -->
+<section class="wrap block" id="obstacles">
+  <header class="sec-head">
+    <p class="kicker"><i></i>05 &middot; Obstacles</p>
+    <h2>Around obstacles the demonstration never had</h2>
+    <p class="sec-lead">After the demonstration, an obstacle is added to the scene, so the expert never had to avoid it.
+      FTE synthesizes around the obstacle's splat, and the policy then avoids the real obstacle. 500 synthetic
+      demonstrations, 40 real rollouts each.</p>
+  </header>
+  <div class="obs-row">
+    <figure>
+      <div class="frame"><video class="autoplay" muted loop playsinline preload="none" poster="static/videos/obs_sweep.jpg"><source src="static/videos/obs_sweep.mp4" type="video/mp4"></video>
+        <span class="tag tag-bl">FTE &middot; Sweep Clean + obstacle <b>3×</b></span></div>
+      <figcaption><span class="kpi"><b>95.0%</b> success</span><span class="kpi"><b>7.5%</b> collisions</span><span class="vs">TrajOpt 82.5% and 22.5%</span></figcaption>
+    </figure>
+    <figure>
+      <div class="frame"><video class="autoplay" muted loop playsinline preload="none" poster="static/videos/obs_ppp.jpg"><source src="static/videos/obs_ppp.mp4" type="video/mp4"></video>
+        <span class="tag tag-bl">FTE &middot; Push&ndash;Pick&ndash;Place + obstacle <b>4×</b></span></div>
+      <figcaption><span class="kpi"><b>82.5%</b> success</span><span class="kpi"><b>12.5%</b> collisions</span><span class="vs">TrajOpt 35.0% and 60.0%</span></figcaption>
+    </figure>
+  </div>
+  <div class="facts">
+    <div><b>86.7%</b><span>FTE success with obstacles, pooled over the three shape-sensitive tasks that have them; TrajOpt 60.0%.</span></div>
+    <div><b>0&ndash;17.5%</b><span>FTE with its density term switched off: the replayed path runs into the obstacle (<a href="#ablations">ablations</a>).</span></div>
+    <div><b>0%</b><span>MPLib in every obstacle setting: as in RoboSplat, it plans without obstacle geometry.</span></div>
+  </div>
+
+  <h3 class="sub-title">How the density term works</h3>
+  <div class="mech">
+    <figure class="plate">
+      <img src="static/images/obstacle_mechanism.jpg" alt="Diagram: perturbed setup with an aligned 3DGS obstacle, local density contours, density and direction gates producing an obstacle acceleration, and a path that avoids locally and returns to the expert reference" loading="lazy">
+      <figcaption>The gradient of the obstacle splat's density pushes the gripper away, but only close to the obstacle
+        (density gate) and less once the gripper already moves away from it (direction gate); afterwards the rollout
+        returns to the expert's path.</figcaption>
+    </figure>
+    <figure class="plate">
+      <img src="static/images/obstacle_example.png" alt="Sweep Clean expert trajectory and an obstacle-aware synthesized trajectory around the obstacle's 3DGS field, in 3D and in an XY slice" loading="lazy">
+      <figcaption>A synthesized Sweep Clean demonstration (orange) beside the expert (blue), with the obstacle's 3DGS
+        density field in red, in 3D and in an XY slice at z&nbsp;=&nbsp;0.19&nbsp;m.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============================== ablations ============================== -->
+<section class="wrap block" id="ablations">
+  <header class="sec-head">
+    <p class="kicker"><i></i>06 &middot; Ablations</p>
+    <h2>What makes it work</h2>
+    <p class="sec-lead">Each ablation changes one part of the pipeline and keeps the rest fixed. The first three are
+      real-robot results with 40 rollouts per bar; the fourth measures the synthesized trajectories only.</p>
+  </header>
+  <div class="abl-grid">
+    <figure class="card abl">
+      <div class="abl-top">
+        <h3>Density term on and off</h3>
+        <div class="abl-ctrl" role="group" aria-label="Synthetic demonstrations">
+          <button type="button" class="chip" data-chart="oa" data-n="256" aria-pressed="false">256 demos</button>
+          <button type="button" class="chip" data-chart="oa" data-n="500" aria-pressed="true">500 demos</button>
+        </div>
+      </div>
+      <div class="chart" id="abl-oa" role="img" aria-label="Success and collision rates of FTE with and without its density term on four tasks with an obstacle absent from the demonstration. At 500 demonstrations, without the term success is 2.5 to 17.5 percent and collisions 77.5 to 95 percent; with it, success is 82.5 to 97.5 percent and collisions 2.5 to 12.5 percent."></div>
+      <figcaption>Without the density term, FTE replays the expert's path into the obstacle, which the demonstration
+        never had to avoid: 0&ndash;17.5% success and 77.5&ndash;97.5% collisions at either budget. With it, success is
+        82.5&ndash;97.5% at 500 demonstrations.</figcaption>
+    </figure>
+
+    <figure class="card abl">
+      <div class="abl-top">
+        <h3>DMP versus affine and spline warps</h3>
+      </div>
+      <div class="chart" id="abl-warp" role="img" aria-label="Real-robot success with 256 demonstrations. Sweep Clean: MPLib 12.5, TrajOpt 75.0, affine warp 87.5, spline warp 92.5, FTE 92.5 percent. Push-Pick-Place: MPLib 2.5, TrajOpt 30.0, affine warp 65.0, spline warp 72.5, FTE 75.0 percent."></div>
+      <figcaption>Affine and spline warps of the expert's path also keep the path, and they do nearly as well as FTE; on
+        Push&ndash;Pick&ndash;Place they reach 65.0% and 72.5%, against 30.0% for TrajOpt. We use DMPs because the density
+        term enters their rollout as an acceleration, which a warp does not allow.</figcaption>
+    </figure>
+
+    <figure class="card abl">
+      <div class="abl-top">
+        <h3>MPLib with a 3DGS obstacle proxy</h3>
+        <div class="abl-ctrl" role="group" aria-label="Synthetic demonstrations">
+          <button type="button" class="chip" data-chart="proxy" data-n="256" aria-pressed="false">256 demos</button>
+          <button type="button" class="chip" data-chart="proxy" data-n="500" aria-pressed="true">500 demos</button>
+        </div>
+      </div>
+      <div class="chart" id="abl-proxy" role="img" aria-label="With an obstacle and 500 demonstrations: MPLib given a 3DGS obstacle proxy collides in 2.5 percent of Sweep Clean and 5.0 percent of Push-Pick-Place rollouts but succeeds in only 17.5 and 10.0 percent, against 95.0 and 82.5 percent for FTE."></div>
+      <figcaption>Given a 3DGS obstacle proxy, MPLib collides in only 2.5&ndash;5.0% of rollouts at 500 demonstrations
+        but succeeds in 10.0&ndash;17.5%. Avoiding the obstacle does not give back the demonstrated path.</figcaption>
+    </figure>
+
+    <figure class="card abl">
+      <div class="abl-top">
+        <h3>Button-press timing</h3>
+      </div>
+      <div class="chart" id="abl-seg" role="img" aria-label="Largest change in position DTW to the expert when every phase boundary is shifted by 0.2 to 1.0 seconds, 100 synthesized trajectories per task. Sweep Clean and Push-Pick-Place stay below 1.6 millimeters; Writing A reaches 5.2 millimeters at 0.6 seconds and 21.1 at 0.8 seconds."></div>
+      <figcaption>Shifting every button press 0.2&nbsp;s earlier or later changes the dynamic-time-warping (DTW)
+        distance between the synthesized paths and the expert by at most 1.5&nbsp;mm and 0.54&deg; (100 paths per task).
+        Sweep Clean and Push&ndash;Pick&ndash;Place stay within 1.5&nbsp;mm for shifts up to 1&nbsp;s; Writing becomes
+        sensitive beyond 0.6&nbsp;s.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============================== perturbation range ============================== -->
+<section class="wrap block" id="range">
+  <header class="sec-head">
+    <p class="kicker"><i></i>07 &middot; Range</p>
+    <h2>How far one demonstration reaches</h2>
+  </header>
+  <div class="split">
+    <div class="prose">
+      <p>The synthesis bounds (1&times;) span about 0.1&nbsp;m per axis. When the objects move beyond them and the policy
+        is not retrained, every method degrades, because FTE only retargets the demonstrated motion locally.</p>
+      <p>When the training window is widened to 2&times;, 256 demonstrations spread too thin: Sweep Clean falls to 65.0%
+        and the Sponge control to 67.5%. Rendering 1,000 demonstrations brings them to 95.0% and 97.5%.</p>
+      <p class="pull">The wider window needed more rendered demonstrations and no further teleoperation.</p>
+    </div>
+    <figure class="card">
+      <div id="coverage-chart" class="chart" role="img" aria-label="Sweep Clean success versus object offset for a fixed policy, and versus training window with 256 and 1,000 demonstrations"></div>
+      <figcaption>Sweep Clean, 40 rollouts per point. Hollow markers: the 2&times; window with 1,000 demonstrations.
+        Hover a point for its value.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============================== full results ============================== -->
+<section class="wrap block" id="numbers">
+  <header class="sec-head">
+    <p class="kicker"><i></i>08 &middot; Table</p>
+    <h2>Every result, 40 real rollouts per policy</h2>
+  </header>
+  <div class="card table-card">
+    <div class="table-scroll">
+      <table class="results">
+        <thead>
+          <tr><th rowspan="2" scope="col">Task</th><th colspan="3" scope="colgroup">No obstacles, 256 demos</th><th colspan="2" scope="colgroup">Obstacles, 256</th><th colspan="2" scope="colgroup">Obstacles, 500</th><th colspan="2" scope="colgroup">Collisions &darr;, 500</th></tr>
+          <tr><th scope="col" class="m-mplib">MPLib</th><th scope="col" class="m-trajopt">TrajOpt</th><th scope="col" class="m-fte">FTE</th><th scope="col" class="m-trajopt">TrajOpt</th><th scope="col" class="m-fte">FTE</th><th scope="col" class="m-trajopt">TrajOpt</th><th scope="col" class="m-fte">FTE</th><th scope="col" class="m-trajopt">TrajOpt</th><th scope="col" class="m-fte">FTE</th></tr>
+        </thead>
+        <tbody>
+          <tr class="group"><th colspan="10" scope="rowgroup">Shape-sensitive</th></tr>
+          <tr><th scope="row">Sweep Clean</th><td>12.5</td><td>75.0</td><td class="best">92.5</td><td>67.5</td><td class="best">80.0</td><td>82.5</td><td class="best">95.0</td><td>22.5</td><td class="best">7.5</td></tr>
+          <tr><th scope="row">Push&ndash;Pick&ndash;Place</th><td>2.5</td><td>30.0</td><td class="best">75.0</td><td>30.0</td><td class="best">50.0</td><td>35.0</td><td class="best">82.5</td><td>60.0</td><td class="best">12.5</td></tr>
+          <tr><th scope="row">Writing &ldquo;A&rdquo;</th><td>0.0</td><td>5.0</td><td class="best">62.5</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+          <tr><th scope="row">Videography</th><td>0.0</td><td>50.0</td><td class="best">72.5</td><td>42.5</td><td class="best">60.0</td><td>62.5</td><td class="best">82.5</td><td>27.5</td><td class="best">22.5</td></tr>
+          <tr class="pool"><th scope="row">Pooled</th><td>3.8</td><td>40.0</td><td class="best">75.6</td><td>46.7</td><td class="best">63.3</td><td>60.0</td><td class="best">86.7</td><td></td><td></td></tr>
+          <tr class="group"><th colspan="10" scope="rowgroup">Endpoint-dominated controls</th></tr>
+          <tr><th scope="row">Sponge Pick&ndash;Place</th><td class="best">95.0</td><td>92.5</td><td>92.5</td><td>82.5</td><td class="best">85.0</td><td>92.5</td><td class="best">95.0</td><td class="best">2.5</td><td class="best">2.5</td></tr>
+          <tr><th scope="row">Stove</th><td>87.5</td><td class="best">90.0</td><td class="best">90.0</td><td>77.5</td><td class="best">80.0</td><td>95.0</td><td class="best">97.5</td><td>5.0</td><td class="best">2.5</td></tr>
+          <tr class="pool"><th scope="row">Pooled</th><td>91.3</td><td>91.3</td><td>91.3</td><td>80.0</td><td class="best">82.5</td><td>93.8</td><td class="best">96.3</td><td></td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="table-caption"><span class="figno">Table 1</span> Real-robot success and collision rates (%), 40 rollouts
+      per cell, one trained policy per cell, one real plus 256 or 500 synthetic demonstrations. Obstacles were absent
+      from the demonstration. Pooled with obstacles: the three shape-sensitive tasks that have them. &ndash;: not run.
+      MPLib, which plans without obstacle geometry, succeeds in none of the obstacle settings (collisions
+      75.0&ndash;100%).</p>
+  </div>
+  <div class="notes">
+    <div>
+      <h3>Protocol</h3>
+      <p>Each cell is one trained policy, run 40 times on layouts inside the synthesis bounds; within a comparison all
+        generators face the same test layouts. Success is judged by inspection (Writing: two judges, 85&ndash;100%
+        agreement), and a collision is any observed contact with the obstacle.</p>
+    </div>
+    <div>
+      <h3>Baselines</h3>
+      <p>MPLib follows RoboSplat and plans without obstacle geometry; the <a href="#ablations">ablations</a> give it a
+        3DGS obstacle proxy. TrajOpt re-implements the trajectory optimization of 1001&nbsp;DEMOS with its own collision
+        cost.</p>
+    </div>
+    <div>
+      <h3>Statistics</h3>
+      <p>Pooled over the four shape-sensitive tasks, FTE exceeds TrajOpt (rollout-level, task-stratified
+        Cochran&ndash;Mantel&ndash;Haenszel <i>p</i>&nbsp;&lt;&nbsp;10<sup>&minus;10</sup>). On the endpoint controls the three
+        generators tie exactly when pooled (73 of 80 each). With obstacles, pooled over the three shape-sensitive
+        tasks: <i>p</i>&nbsp;=&nbsp;2.9&times;10<sup>&minus;6</sup> at 500 demonstrations, <i>p</i>&nbsp;=&nbsp;0.011 at 256.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== limitations ============================== -->
+<section class="wrap block" id="limitations">
+  <header class="sec-head">
+    <p class="kicker"><i></i>09 &middot; Limitations</p>
+    <h2>What it assumes</h2>
+  </header>
+  <ul class="scope">
+    <li><b>One good demonstration per task.</b> The operator marks the phase boundaries with button presses while
+      teleoperating.</li>
+    <li><b>Static scenes and rigid objects.</b> The splat renders views and repels the gripper; it simulates no
+      dynamics, and its density is an uncalibrated proxy for occupancy.</li>
+    <li><b>Bounded perturbations.</b> FTE retargets within the synthesis bounds; a wider window takes more rendered
+      data (<a href="#range">range</a>).</li>
+  </ul>
+</section>
+
+</main>
+
+<footer class="site-footer dark">
+  <div class="wrap footer-in">
+    <a class="brand" href="#top" aria-label="Back to top">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 23 C10 9, 15 9, 16 16 S22 23, 27 9" /></svg>
+      <span>Follow-the-Expert</span>
+    </a>
+    <p>University of New Hampshire, Durham, NH. Page structure adapted from the
+      <a href="https://github.com/nerfies/nerfies.github.io">Nerfies template</a>
+      (<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>); this page is shared under the same
+      license. Last updated October 2026.</p>
+  </div>
+</footer>
+
+<script src="static/js/main.js"></script>
+</body>
+</html>
